@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Práctica 2 Suma de puntos</title>
+
+  <!-- CSS de Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <h1 class="display-1 text-primary" style="text-align: center; margin-bottom: 5%;"><b>Suma de puntos</b></h1>
+    <form>
+        <div style="display: flex;  gap: 15%; margin-left: 20%; margin-right: 20%;">
+            <div class="input-group mb-3">
+                <span class="input-group-text">a</span>
+                <input type="text" class="form-control" aria-label="Username" aria-describedby="basic-addon1" id="a">
+            </div>
+            <div class="input-group mb-3">
+                <span class="input-group-text">b</span>
+                <input type="text" class="form-control" aria-label="Username" aria-describedby="basic-addon1" id="b">
+            </div>
+            <div class="input-group mb-3">
+                <span class="input-group-text">n</span>
+                <input type="text" class="form-control" aria-label="Username" aria-describedby="basic-addon1" id="n" required>
+            </div>
+        </div>
+
+        <div style="grid-template-columns: 1fr 1fr; margin-left: 15%; margin-right: 15%; margin-top: 2%;" class="d-grid gap-3">
+                <!-- Casilla para x1 -->
+                <div class="form-floating mb-3">
+                    <input type="text" class="form-control" id="x1" placeholder="x1" required>
+                    <label for="floatingInput">x1</label>
+                </div>
+                <!-- Casilla para y1 -->
+                <div class="form-floating mb-3">
+                    <input type="text" class="form-control" id="y1" placeholder="y1" required>
+                    <label for="floatingInput">y1</label>
+                </div>
+                <div class="form-floating mb-3">
+                    <input type="text" class="form-control" id="x2" placeholder="x2" required>
+                    <label for="floatingInput">x2</label>
+                </div>
+                <div class="form-floating mb-3">
+                    <input type="text" class="form-control" id="y2" placeholder="y2" required>
+                    <label for="floatingInput">y2</label>
+                </div>
+        </div>
+        <div class="mx-auto p-2" style="width: 300px; text-align: center;">
+            <button type="button" class="btn btn-primary" id="boton" onclick="CalcularSumaPuntos()">Realizar la suma de puntos</button>
+        </div>
+    </form>
+    <div class="alert alert-danger" role="alert" id="mensajeError" style="visibility: none; margin-bottom: 0%;"></div>
+    <div id="calcularLaSumaPuntos">
+        <p class="lead" id="lambda" style="margin-left: 10%; margin-top: 5%; margin-bottom: 5%; margin-right: 10%;"></p>
+        <h1 class="display-6" style="text-align: center; margin-bottom: 5%;" id="tituloTablas"></h1>
+
+        <div id="tablaExtendidoEuclides" style="margin-left: 10%; margin-right: 10%;">
+            <table class="table table-hover" id="tablaDatos">
+            </table>
+        </div>
+
+        <h1 class="display-7" style="text-align: center; margin-left: 10%; margin-top: 3%; margin-bottom: 3%; margin-right: 10%;" id="resultadoAlgoritmoEuclides"></h1>
+        <p class="lead" id="continuacionLambda" style="margin-left: 10%; margin-top: 5%; margin-bottom: 5%; margin-right: 10%;"></p>
+        <p class="lead" id="valorx3" style="margin-left: 10%; margin-top: 5%; margin-bottom: 5%; margin-right: 10%;"></p>
+        <p class="lead" id="valory3" style="margin-left: 10%; margin-top: 5%; margin-bottom: 5%; margin-right: 10%;"></p>
+        <h1 class="display-2 text-primary" style="text-align: center; margin-left: 10%; margin-top: 3%; margin-bottom: 3%; margin-right: 10%;" id="valorFinalPunto"></h1>
+    </div>
+        
+
+
+  <!-- JS de Bootstrap -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let error = document.getElementById("mensajeError");
+    error.style.display = "none";
+    let operaciones = document.getElementById("calcularLaSumaPuntos");
+    operaciones.style.display = "none";
+    function CalcularSumaPuntos(){
+        // Obtiene los valores de las casillas
+        let a = document.getElementById("a").value;
+        let n = document.getElementById("n").value;
+        let x1 = document.getElementById("x1").value;
+        let x2 = document.getElementById("x2").value;
+        let y1 = document.getElementById("y1").value;
+        let y2 = document.getElementById("y2").value;
+        // Se calcula el inverso aditivo
+        let x1Temp;
+        let x2Temp;
+        let y1Temp;
+        let y2Temp;
+        // Se calcula el inverso aditivo por si hay un valor negativo
+        if(x1<0){
+            x1 = Math.abs(x1);
+            x1Temp = n - (x1%n);
+        }else{
+            x1Temp = x1;
+        }
+        if(x2<0){
+            x2 = Math.abs(x2);
+            x2Temp = n - (x2%n);
+        }else{
+            x2Temp = x2;
+        }
+        if(y1<0){
+            y1 = Math.abs(y1);
+            y1Temp = n - (y1%n);
+        }else{
+            y1Temp = y1;
+        }
+        if(y2<0){
+            y2 = Math.abs(y2);
+            y2Temp = n - (y2%n);
+        }else{
+            y2Temp = y2;
+        }
+        
+        // Error si n es menor o igual a 0
+        if(n<=0){
+            let error = document.getElementById("mensajeError");
+            error.innerHTML = "El valor de n no puede ser menor o igual a cero";
+            error.style.display = "block";
+            operaciones.style.display = "none";
+        }else{
+            error.style.display = "none";
+            operaciones.style.display = "none";
+            // Calcula el numerador y el denominador 
+            let numerador = y2Temp - y1Temp;
+            let denominador = x2Temp - x1Temp;
+            let numeradorPositivo;
+            let denominadorPositivo;
+            numeradorPositivo = numerador;       
+            // Se calcula el inverso aditivo si el denominador es menor a cero
+            if(denominador<0){
+                denominador = Math.abs(denominador);
+                denominadorPositivo = n - (denominador%n);
+            }else{
+                denominadorPositivo = denominador;
+            }
+            // Error si el numerador es 0
+            if(denominador == 0){
+                error.innerHTML = "El numerador es cero";
+                error.style.display = "block";
+            }else{
+                operaciones.style.display = "block";
+                // Texto inicial de lambda
+                document.getElementById("lambda").innerHTML = "<b>lambda</b> = (y<sub>2</sub> - y<sub>1</sub>)/(x<sub>2</sub> - x<sub>1</sub>) = ("+y2Temp+" - "+y1Temp+")/("+x2Temp+" - "+x1Temp+") = ("+numeradorPositivo+")/("+denominadorPositivo+") = ("+numeradorPositivo+") * ("+denominadorPositivo+")<sup>-1</sup>";
+                // Tabla del algoritmo extendido de Euclides
+                document.getElementById("tituloTablas").innerHTML = "<b>Algoritmo extendido de Euclides</b>";
+                // Se realiza el algoritmo extendido de Euclides
+                let inversoDenominador = AlgoritmoExtendidoEuclides(denominadorPositivo,n);
+                // Resultado de lambda
+                let valorlambda = numeradorPositivo*inversoDenominador;
+                let valorlambdaPositivo;
+                // Si lambda es negativo, entonces utiliza el inverso aditivo
+                if(valorlambda<0){
+                    valorlambdaPositivo = n - (Math.abs(valorlambda)%n);
+                }else{
+                    valorlambdaPositivo = valorlambda%n;
+                }
+                // Continuación de la operación Lambda debajo de la tabla
+                document.getElementById("continuacionLambda").innerHTML = "<b>lambda</b> = ("+numeradorPositivo+") * ("+denominadorPositivo+")<sup>-1</sup> = ("+numeradorPositivo+")"+" * ("+inversoDenominador+") mod "+n+" = "+valorlambdaPositivo;
+                // Se calcula x3
+                let x3 = (valorlambdaPositivo * valorlambdaPositivo - x1Temp - x2Temp);
+                let x3Positivo;
+                // Realiza el inverso aditivo en caso de que x3 sea negativo
+                if(x3<0){
+                    x3Positivo = n - (Math.abs(x3)%n);
+                }else{
+                    x3Positivo = x3%n;
+                }
+                document.getElementById("valorx3").innerHTML = "<b>x<sub>3</sub></b> = ((lambda)<sup>2</sup> - (x<sub>1</sub>) - (x<sub>2</sub>)) mod (n) = (("+valorlambdaPositivo+")<sup>2</sup> - ("+x1Temp+") - ("+x2Temp+")) mod "+n+" = "+x3Positivo;
+                // Se calcula y3
+                let y3 = (valorlambdaPositivo*(x1Temp - x3Positivo)-y1Temp);
+                let y3Positivo;
+                // Realiza el inverso aditivo en caso de que y3 sea negativo
+                if(y3<0){
+                    y3Positivo = n - (Math.abs(y3)%n);
+                }else{
+                    y3Positivo = y3%n;
+                }
+                document.getElementById("valory3").innerHTML = "<b>y<sub>3</sub></b> = ((lambda) * ((x<sub>1</sub>) - (x<sub>3</sub>)) - (y<sub>1</sub>)) mod (n) = (("+valorlambdaPositivo+") * (("+x1Temp+") - ("+x3Positivo+")) - ("+y1Temp+")) mod ("+n+") = "+y3Positivo;
+                document.getElementById("valorFinalPunto").innerHTML =  "<b>P("+x3Positivo+","+y3Positivo+")</b>";
+            }
+        }   
+        // Función Algoritmo Extendido de Euclides donde recibe el denominador y n
+        function AlgoritmoExtendidoEuclides(a,n){
+            let s = [1,0];
+            let t = [0,1];
+            let r = [n,a];
+            let q = [];
+            let divisor = a;
+            let dividendo = n;
+            let contador = 0;
+            let resultado = 0;
+            let moduloTemp = 0;
+            while(r[contador+1] != 1){
+                // Se redondea el cociente
+                q.push(Math.floor(r[contador]/r[contador+1]))   
+                console.log("Math: "+Math.floor(r[contador]/r[contador+1]));
+                // Se calcula el residuo
+                r.push(r[contador]%r[contador+1])   
+                //r.push(moduloTemp);
+                s.push(s[contador] - q[contador]*s[contador+1]);
+                t.push(t[contador] - q[contador]*t[contador+1]);
+                console.log(r[contador+2]+" = ("+s[contador+2]+") * ("+ n +") + (" + t[contador+2] + ") * (" + a);
+                contador = contador + 1;
+            }
+            
+            // Mostrar valores en la tabla
+            let tabla = document.getElementById("tablaDatos");
+            tabla.innerHTML = "";
+            // Busca el arreglo con el mayor número de datos
+            let max = Math.max(q.length,r.length,s.length,t.length);
+            // Tabla con los datos del algoritmo extendido de Euclides
+            tabla.innerHTML = '<thead><tr><th scope="col">q</th><th scope="col">r</th><th scope="col">s</th><th scope="col">t</th></tr></thead>';
+            // Agrega los datos a la tabla
+            for(let i = 0; i < max; i++){
+                let qTemp = q[i] || "";
+                let rTemp = r[i] || "";
+                let sTemp = s[i] || "";
+                let tTemp = t[i] || "";
+                tabla.innerHTML += 
+                "<tr>"+
+                    "<td>"+qTemp+"</td>"+
+                    "<td>"+rTemp+"</td>"+
+                    "<td>"+sTemp+"</td>"+
+                    "<td>"+tTemp+"</td>"+
+                "</tr>";
+            }
+            // Imprime el resultado
+            document.getElementById("resultadoAlgoritmoEuclides").innerHTML=r[contador+1]+" = ("+s[contador+1] +") * ("+n+") + ("+t[contador+1]+") * ("+a+")";
+            if(t[contador+1]<0){
+                t[contador+1] = Math.abs(t[contador+1]);
+                resultado = n - (t[contador+1]%n);
+            }else{
+                resultado = t[contador+1]
+            }
+            return resultado;
+        }
+    }
+  </script>
+</body>
+</html>
