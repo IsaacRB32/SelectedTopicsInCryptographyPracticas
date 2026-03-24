@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Práctica 3 – Multiplicación Escalar | Criptografía</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="page-header">
+    <a href="../../../index.html" class="back-btn">
+        <i class="fas fa-arrow-left"></i> Volver
+    </a>
+    <div class="header-info">
+        <h1><i class="fas fa-infinity" style="color:var(--turquoise);margin-right:8px;"></i>Práctica 3 — Multiplicación Escalar de Puntos</h1>
+        <p>Criptografía · Ingeniería en Sistemas Computacionales · ESCOM</p>
+    </div>
+    <span class="header-badge"><i class="fas fa-lock"></i> Criptografía</span>
+</header>
+
+<div class="main-wrap">
+
+    <div class="formula-hero">
+        <h2><i class="fas fa-square-root-alt" style="color:var(--turquoise);margin-right:6px;"></i>Ecuación de la Curva Elíptica</h2>
+        <div class="formula-display">y² ≡ x³ + ax + b &nbsp;(mod p)</div>
+        <div id="formulaDynamic">↑ Ingresa los parámetros para ver la curva específica</div>
+    </div>
+
+    <div class="input-panel">
+        <h3><i class="fas fa-sliders-h" style="color:var(--turquoise);"></i> Parámetros de Entrada</h3>
+        <div class="inputs-row">
+            <div class="inp-group">
+                <label>Coeficiente &nbsp;<strong style="color:var(--aqua-light);">a</strong></label>
+                <input type="number" id="inputA"  placeholder="a">
+            </div>
+            <div class="inp-group">
+                <label>Coeficiente &nbsp;<strong style="color:var(--aqua-light);">b</strong></label>
+                <input type="number" id="inputB"  placeholder="b">
+            </div>
+            <div class="inp-group">
+                <label>Primo &nbsp;<strong style="color:var(--aqua-light);">p</strong></label>
+                <input type="number" id="inputP"  placeholder="p">
+            </div>
+            <button class="calc-btn" onclick="runCalc()">
+                <i class="fas fa-calculator"></i> Calcular
+            </button>
+        </div>
+        
+    </div>
+
+    <div class="msg-area" id="msgArea"></div>
+
+    <div class="results-section" id="resultsSection">
+
+        <div class="step-card">
+            <div class="step-title">
+                <span class="step-num">1</span>
+                Verificación de Curva Válida &nbsp;—&nbsp; <span style="font-family:'Courier New',monospace;color:var(--gold);">Δ = 4a³ + 27b² ≢ 0 (mod p)</span>
+            </div>
+            <div class="disc-box" id="discBox"></div>
+        </div>
+
+        <div class="tables-grid">
+            <div class="step-card" style="margin-bottom:0">
+                <div class="step-title">
+                    <span class="step-num">2</span>
+                    <span>z = x³ + ax + b &nbsp;(mod p)</span>
+                </div>
+                <div class="table-scroll" id="tableZWrap"></div>
+            </div>
+            <div class="step-card" style="margin-bottom:0">
+                <div class="step-title">
+                    <span class="step-num">3</span>
+                    <span>Residuos cuadráticos: y² mod p</span>
+                </div>
+                <div class="table-scroll" id="tableYWrap"></div>
+            </div>
+        </div>
+        <div style="margin-bottom:22px;"></div>
+
+        <div class="step-card">
+            <div class="step-title">
+                <span class="step-num">4</span>
+                Coincidencias: ¿Para qué (x, y) es z(x) = y²(y)?
+            </div>
+            <div id="matchWrap"></div>
+        </div>
+
+        <div class="step-card">
+            <div class="step-title">
+                <span class="step-num">5</span>
+                Conjunto E completo y Cardinalidad |E|
+            </div>
+            <div class="points-wrap">
+                <div class="points-label">E = {</div>
+                <div class="points-flow" id="pointsFlow"></div>
+                <div class="points-label" style="margin-top:10px;">}</div>
+            </div>
+            <div class="card-box">
+                <div class="lbl">Cardinalidad del grupo</div>
+                <div class="val" id="cardVal">—</div>
+                <div class="sub" id="cardSub"></div>
+            </div>
+        </div>
+
+        <!-- SECCIÓN: MULTIPLICACIÓN ESCALAR -->
+        <div class="step-card" style="margin-top:40px;">
+            <div class="step-title">
+                <span class="step-num" style="background: linear-gradient(135deg, var(--coral-pink), #ff8fb3); margin-right:10px;"></span>
+                <i class="fas fa-times" style="color:var(--coral-pink);margin-right:6px;"></i>Multiplicación Escalar (k·P)
+            </div>
+
+            <div class="scalar-mult-panel">
+                <div class="inputs-row">
+                    <div class="inp-group">
+                        <label><strong>x₁</strong> (abscisa)</label>
+                        <input type="number" id="x1_esc" class="scalar-input" placeholder="x1">
+                    </div>
+                    <div class="inp-group">
+                        <label><strong>y₁</strong> (ordenada)</label>
+                        <input type="number" id="y1_esc" class="scalar-input" placeholder="y1">
+                    </div>
+                    <div class="inp-group">
+                        <label><strong>k</strong> (escalar)</label>
+                        <input type="number" id="n" class="scalar-input" placeholder="k">
+                    </div>
+                    <button class="calc-btn calc-btn-scalar" onclick="CalcularMultiplicacionEscalar()">
+                        <i class="fas fa-play"></i> Calcular k·P
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONTENEDOR RESULTADOS: DOBLADO DE PUNTOS -->
+        <div id="contenedorDoblado" class="procedure-container">
+            <div class="alert alert-danger" role="alert" id="mensajeError" style="display: none;"></div>
+            <div id="calcularDobladoPuntos" class="procedure-section">
+                <div class="procedure-card">
+                    <h3 class="procedure-title">
+                        <i class="fas fa-plus-circle" style="color:var(--aqua-light); margin-right:8px;"></i>
+                        Doblado de Puntos (2P, 4P, 8P...)
+                    </h3>
+                    <div class="procedure-content">
+                        <div class="lambda-box" id="lambda"></div>
+                        <h4 class="procedure-subtitle" id="tituloTablas"></h4>
+                        
+                        <div class="table-wrapper">
+                            <table class="table table-hover" id="tablaDatos"></table>
+                        </div>
+
+                        <div class="result-box" id="resultadoAlgoritmoEuclides"></div>
+                        <div class="lambda-continuation" id="continuacionLambda"></div>
+                        <div class="calculation-result" id="valorx3"></div>
+                        <div class="calculation-result" id="valory3"></div>
+                        <div class="final-point" id="valorFinalPunto"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONTENEDOR RESULTADOS: SUMA DE PUNTOS -->
+        <div id="contenedorSuma" class="procedure-container">
+            <div id="calcularLaSumaPuntos" class="procedure-section">
+                <div class="procedure-card">
+                    <h3 class="procedure-title">
+                        <i class="fas fa-plus-circle" style="color:var(--aqua-light); margin-right:8px;"></i>
+                        Suma de Puntos (P₁ + P₂)
+                    </h3>
+                    <div class="procedure-content">
+                        <div class="lambda-box" id="lambda1"></div>
+                        <h4 class="procedure-subtitle" id="tituloTablas1"></h4>
+                        
+                        <div class="table-wrapper">
+                            <table class="table table-hover" id="tablaDatos1"></table>
+                        </div>
+
+                        <div class="result-box" id="resultadoAlgoritmoEuclides1"></div>
+                        <div class="lambda-continuation" id="continuacionLambda1"></div>
+                        <div class="calculation-result" id="valorx31"></div>
+                        <div class="calculation-result" id="valory31"></div>
+                        <div class="final-point" id="valorFinalPunto1"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="page-footer">
+    Práctica 3 · Multiplicación Escalar · Criptografía · ESCOM — IPN
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
