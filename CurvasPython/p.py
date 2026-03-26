@@ -77,7 +77,7 @@ def main(page: ft.Page):
     a_input = ft.TextField(label="a", width=80)
     b_input = ft.TextField(label="b", width=80)
     p_input = ft.TextField(label="p", width=80)
-    validate_btn = ft.ElevatedButton("Validar curva + puntos", icon=ft.icons.CHECK_CIRCLE)
+    validate_btn = ft.ElevatedButton("Validar curva + puntos")
 
     # Área para mostrar los resultados de validación y lista de puntos
     curve_output = ft.Column()
@@ -88,14 +88,14 @@ def main(page: ft.Page):
     p1_y = ft.TextField(label="y₁", width=80)
     p2_x = ft.TextField(label="x₂", width=80)
     p2_y = ft.TextField(label="y₂", width=80)
-    sum_btn = ft.ElevatedButton("Sumar", icon=ft.icons.ADD)
+    sum_btn = ft.ElevatedButton("Sumar")
     sum_output = ft.Column()
 
     # ========== SECCIÓN DOBLADO ==========
     dbl_title = ft.Text("Doblado de punto (2P)", size=18, weight="bold")
     dbl_x = ft.TextField(label="x", width=80)
     dbl_y = ft.TextField(label="y", width=80)
-    dbl_btn = ft.ElevatedButton("Doblar", icon=ft.icons.REPEAT)
+    dbl_btn = ft.ElevatedButton("Doblar")
     dbl_output = ft.Column()
 
     # ========== SECCIÓN MULTIPLICACIÓN ESCALAR ==========
@@ -103,7 +103,7 @@ def main(page: ft.Page):
     mul_x = ft.TextField(label="x", width=80)
     mul_y = ft.TextField(label="y", width=80)
     mul_k = ft.TextField(label="k (escalar)", width=100)
-    mul_btn = ft.ElevatedButton("Multiplicar", icon=ft.icons.REFRESH)
+    mul_btn = ft.ElevatedButton("Multiplicar")
     mul_output = ft.Column()
 
     # ========== VARIABLES DE ESTADO DE LA CURVA ==========
