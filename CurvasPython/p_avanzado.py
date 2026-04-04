@@ -156,7 +156,7 @@ def main(page: ft.Page):
     a_input = ft.TextField(label="a", width=80)
     b_input = ft.TextField(label="b", width=80)
     p_input = ft.TextField(label="p", width=80)
-    validate_btn = ft.Button("Validar curva + puntos")
+    validate_btn = ft.ElevatedButton("Validar curva + puntos")
     curve_output = ft.Column()
 
     # ========== SECCIÓN SUMA ==========
@@ -165,14 +165,14 @@ def main(page: ft.Page):
     p1_y = ft.TextField(label="y₁", width=80)
     p2_x = ft.TextField(label="x₂", width=80)
     p2_y = ft.TextField(label="y₂", width=80)
-    sum_btn = ft.Button("Sumar")
+    sum_btn = ft.ElevatedButton("Sumar")
     sum_output = ft.Column()
 
     # ========== SECCIÓN DOBLADO ==========
     dbl_title = ft.Text("Doblado de punto (2P)", size=18, weight="bold")
     dbl_x = ft.TextField(label="x", width=80)
     dbl_y = ft.TextField(label="y", width=80)
-    dbl_btn = ft.Button("Doblar")
+    dbl_btn = ft.ElevatedButton("Doblar")
     dbl_output = ft.Column()
 
     # ========== SECCIÓN MULTIPLICACIÓN ESCALAR ==========
@@ -180,16 +180,16 @@ def main(page: ft.Page):
     mul_x = ft.TextField(label="x", width=80)
     mul_y = ft.TextField(label="y", width=80)
     mul_k = ft.TextField(label="k (escalar)", width=100)
-    mul_btn = ft.Button("Multiplicar")
+    mul_btn = ft.ElevatedButton("Multiplicar")
     mul_output = ft.Column()
 
     # ========== SECCIÓN AVANZADA: TABLAS ==========
     tabla_sumas_title = ft.Text("Tabla de Sumas (P + Q)", size=18, weight="bold")
-    tabla_sumas_btn = ft.Button("Generar Tabla de Sumas")
+    tabla_sumas_btn = ft.ElevatedButton("Generar Tabla de Sumas")
     tabla_sumas_output = ft.Column()
 
     tabla_mul_title = ft.Text("Tabla de Multiplicación Escalar (kP)", size=18, weight="bold")
-    tabla_mul_btn = ft.Button("Generar Tabla de Multiplicación")
+    tabla_mul_btn = ft.ElevatedButton("Generar Tabla de Multiplicación")
     tabla_mul_output = ft.Column()
 
     # ========== ESTADOS ==========
