@@ -133,6 +133,25 @@ def generar_tabla_multiplicacion(puntos_afines, a, p, orden):
     
     return tabla
 
+def obtener_generadores(puntos_afines, a, p, orden):
+    generadores = []
+    for punto in puntos_afines:
+        visitados = set()
+        actual = punto
+        es_generador = True
+        
+        for k in range(1, orden + 1):
+            str_punto = punto_to_str(actual)
+            if str_punto in visitados and k < orden:
+                es_generador = False
+                break
+            visitados.add(str_punto)
+            actual, _ = sumar_puntos(actual, punto, a, p) # [cite: 2, 10]
+        
+        if es_generador and len(visitados) == orden:
+            generadores.append(punto)
+    return generadores
+
 
 def tabla_a_texto(tabla):
     ancho_cols = [max(len(str(tabla[i][j])) for i in range(len(tabla))) for j in range(len(tabla[0]))]
@@ -192,6 +211,11 @@ def main(page: ft.Page):
     tabla_mul_btn = ft.ElevatedButton("Generar Tabla de Multiplicación")
     tabla_mul_output = ft.Column()
 
+    # ========== SECCIÓN GENERADORES ==========
+    gen_title = ft.Text("Identificar Generadores", size=18, weight="bold")
+    gen_btn = ft.ElevatedButton("Buscar Puntos Generadores")
+    gen_output = ft.Column()
+
     # ========== ESTADOS ==========
     curve_valid = False
     validated_params = None
@@ -241,7 +265,7 @@ def main(page: ft.Page):
         puntos_afines = [pt for pt in puntos_curva if pt is not None]
         orden = len(puntos_curva)
 
-        curve_output.controls.append(ft.Text("✓ Curva válida", color="green"))
+        curve_output.controls.append(ft.Text("Curva válida", color="green"))
         curve_output.controls.append(ft.Text(f"Puntos afines: {', '.join([f'({x},{y})' for x, y in puntos_afines])}", size=10))
         curve_output.controls.append(ft.Text(f"Orden |E| = {orden}", weight="bold", color="blue"))
         page.update()
@@ -325,12 +349,32 @@ def main(page: ft.Page):
             tabla_mul_output.controls.append(ft.Text(f"Error: {ex}", color="red"))
         page.update()
 
+    def identificar_generadores_action(e):
+        gen_output.controls.clear()
+        params = verificar_curva_operacion(gen_output)
+        if not params: return
+        a, b, p = params
+
+        puntos_afines = [pt for pt in puntos_curva if pt is not None]
+        orden = len(puntos_curva) # 
+
+        gens = obtener_generadores(puntos_afines, a, p, orden)
+
+        if gens:
+            txt = f"Se encontraron {len(gens)} generadores:\n"
+            txt += ", ".join([punto_to_str(g) for g in gens])
+            gen_output.controls.append(ft.Text(txt, color="blue", weight="bold"))
+        else:
+            gen_output.controls.append(ft.Text("No se encontraron generadores (el grupo podría no ser cíclico).", color="orange"))
+        page.update()
+
     validate_btn.on_click = validar_curva_action
     sum_btn.on_click = sumar_action
     dbl_btn.on_click = doblar_action
     mul_btn.on_click = multiplicar_action
     tabla_sumas_btn.on_click = generar_tabla_sumas_action
     tabla_mul_btn.on_click = generar_tabla_mul_action
+    gen_btn.on_click = identificar_generadores_action
 
     # ========== ARMADO ==========
     page.add(
@@ -341,6 +385,7 @@ def main(page: ft.Page):
             mul_title, ft.Row([mul_x, mul_y]), mul_k, mul_btn, mul_output, ft.Divider(),
             tabla_sumas_title, tabla_sumas_btn, tabla_sumas_output, ft.Divider(),
             tabla_mul_title, tabla_mul_btn, tabla_mul_output,
+            gen_title, gen_btn, gen_output,
         ])
     )
 
