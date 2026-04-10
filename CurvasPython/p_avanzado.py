@@ -242,10 +242,19 @@ def main(page: ft.Page):
         nonlocal curve_valid, validated_params, puntos_curva
         curve_output.controls.clear()
 
+        # Limpiar campos de entrada de todas las secciones
+        for campo in [p1_x, p1_y, p2_x, p2_y, dbl_x, dbl_y, mul_x, mul_y, mul_k]:
+            campo.value = ""
+        
+        # Limpiar contenedores de salida de resultados
+        for salida in [sum_output, dbl_output, mul_output, 
+                    tabla_sumas_output, tabla_mul_output, gen_output]:
+            salida.controls.clear()
         try:
             a, b, p = int(a_input.value), int(b_input.value), int(p_input.value)
         except ValueError:
             curve_output.controls.append(ft.Text("Error: Valores deben ser enteros.", color="red"))
+            seccion_operaciones.visible = False
             page.update()
             return
 
@@ -255,20 +264,36 @@ def main(page: ft.Page):
         if not valida:
             curve_output.controls.append(ft.Text("Curva NO válida (discriminante cero).", color="red"))
             curve_valid = False
+            seccion_operaciones.visible = False
             page.update()
             return
 
         curve_valid = True
+        seccion_operaciones.visible = True
         validated_params = (a, b, p)
         
         puntos_curva = obtener_todos_puntos(a, b, p)
         puntos_afines = [pt for pt in puntos_curva if pt is not None]
         orden = len(puntos_curva)
-
+        lista_puntos_str = ", ".join([punto_to_str(pt) for pt in puntos_curva])
+        
         curve_output.controls.append(ft.Text("Curva válida", color="green"))
-        curve_output.controls.append(ft.Text(f"Puntos afines: {', '.join([f'({x},{y})' for x, y in puntos_afines])}", size=10))
+        curve_output.controls.append(ft.Text(f"Puntos en E: {lista_puntos_str}", size=10))
         curve_output.controls.append(ft.Text(f"Orden |E| = {orden}", weight="bold", color="blue"))
         page.update()
+        
+    # ========== CONTENEDOR DE OPERACIONES (Inicialmente oculto) ==========
+    seccion_operaciones = ft.Column(
+        visible=False, 
+        controls=[
+            sum_title, ft.Row([p1_x, p1_y]), ft.Row([p2_x, p2_y]), sum_btn, sum_output, ft.Divider(),
+            dbl_title, ft.Row([dbl_x, dbl_y]), dbl_btn, dbl_output, ft.Divider(),
+            mul_title, ft.Row([mul_x, mul_y]), mul_k, mul_btn, mul_output, ft.Divider(),
+            tabla_sumas_title, tabla_sumas_btn, tabla_sumas_output, ft.Divider(),
+            tabla_mul_title, tabla_mul_btn, tabla_mul_output,
+            gen_title, gen_btn, gen_output,
+        ]
+    )
 
     # ========== EVENTOS ==========
     def sumar_action(e):
@@ -379,13 +404,12 @@ def main(page: ft.Page):
     # ========== ARMADO ==========
     page.add(
         ft.Column([
-            curve_title, ft.Row([a_input, b_input, p_input]), validate_btn, curve_output, ft.Divider(),
-            sum_title, ft.Row([p1_x, p1_y]), ft.Row([p2_x, p2_y]), sum_btn, sum_output, ft.Divider(),
-            dbl_title, ft.Row([dbl_x, dbl_y]), dbl_btn, dbl_output, ft.Divider(),
-            mul_title, ft.Row([mul_x, mul_y]), mul_k, mul_btn, mul_output, ft.Divider(),
-            tabla_sumas_title, tabla_sumas_btn, tabla_sumas_output, ft.Divider(),
-            tabla_mul_title, tabla_mul_btn, tabla_mul_output,
-            gen_title, gen_btn, gen_output,
+            curve_title, 
+            ft.Row([a_input, b_input, p_input]), 
+            validate_btn, 
+            curve_output, 
+            ft.Divider(),
+            seccion_operaciones # Aquí está todo lo demás agrupado
         ])
     )
 
