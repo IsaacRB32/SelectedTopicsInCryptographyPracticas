@@ -336,8 +336,12 @@ def main(page: ft.Page):
         a, b, p = params
 
         try:
+            puntos_curva = obtener_todos_puntos(a,b,p)
+            
             P = (int(mul_x.value), int(mul_y.value))
             k = int(mul_k.value)
+            if k <= 0 or k > (len(puntos_curva)):
+                return None
             R, pasos = multiplicacion_escalar(P, k, a, p)
             mul_output.controls.append(ft.Text(f"{k}P = {punto_to_str(R)}", size=18))
         except Exception as ex:
