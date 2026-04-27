@@ -3,25 +3,25 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext
 from ecdsa import VerifyingKey, SECP256k1
 
-# -- Parametros de la curva SECP256k1
+# Parametros de la curva SECP256k1
 curva = SECP256k1
-n     = curva.order
-G     = curva.generator
+n  = curva.order
+G = curva.generator
 
-# -- Paleta de colores
-BG          = "#0f172a"   # fondo principal  (azul muy oscuro)
-CARD        = "#1e293b"   # fondo de tarjetas
-BORDE       = "#334155"   # bordes sutiles
-AZUL        = "#3b82f6"   # acento principal
-AZUL_HOVER  = "#2563eb"
-TEXTO       = "#e2e8f0"   # texto principal
-TEXTO_DIM   = "#94a3b8"   # texto secundario
-VERDE       = "#22c55e"
-ROJO        = "#ef4444"
-MONO        = "#0f172a"   # fondo del area de log
+#  Paleta de colores
+BG = "#0f172a"   # fondo principal  (azul muy oscuro)
+CARD = "#1e293b"   # fondo de tarjetas
+BORDE = "#334155"   # bordes sutiles
+AZUL = "#3b82f6"   # acento principal
+AZUL_HOVER = "#2563eb"
+TEXTO = "#e2e8f0"   # texto principal
+TEXTO_DIM = "#94a3b8"   # texto secundario
+VERDE = "#22c55e"
+ROJO  = "#ef4444"
+MONO  = "#0f172a"   # fondo del area de log
 
 
-# ── Helpers de UI ─────────────────────────────────────────────────────────────
+# Helpers de UI
 
 def hacer_hover(boton, color_normal, color_hover):
     boton.bind("<Enter>", lambda e: boton.config(bg=color_hover))
@@ -62,7 +62,7 @@ def fila_entrada(padre, var_entry, cmd_boton):
     return entry
 
 
-# ── Funcion principal de verificacion ─────────────────────────────────────────
+# Funcion principal de verificacion
 def verificar():
     # Leer llave publica
     ruta_publica = var_llave.get().strip()
@@ -169,7 +169,7 @@ def verificar():
     area_resultado.config(state=tk.DISABLED)
 
 
-# ── Funciones de explorador de archivos ───────────────────────────────────────
+# Funciones de explorador de archivos
 def buscar_llave():
     ruta = filedialog.askopenfilename(
         title="Selecciona el archivo de llave publica",
@@ -187,7 +187,7 @@ def buscar_mensaje():
         var_mensaje.set(ruta)
 
 
-# ── Ventana principal ──────────────────────────────────────────────────────────
+# Ventana principal
 ventana = tk.Tk()
 ventana.title("Verificador ECDSA")
 ventana.configure(bg=BG)
