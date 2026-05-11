@@ -84,8 +84,10 @@ def verificar():
         messagebox.showerror("Error", "Selecciona el archivo del mensaje.")
         return
     try:
-        with open(ruta_msg, 'r') as f:
-            mensaje = f.read().strip()
+        # Leer en binario para soportar acentos y cualquier codificacion
+        with open(ruta_msg, 'rb') as f:
+            mensaje_bytes = f.read().strip()
+        mensaje_display = mensaje_bytes.decode('utf-8', errors='replace')
     except Exception as e:
         messagebox.showerror("Error", f"No se pudo leer el mensaje:\n{e}")
         return
@@ -102,8 +104,9 @@ def verificar():
         messagebox.showerror("Error", "La firma contiene caracteres no hexadecimales.")
         return
 
-    # Paso 1: e = SHA-256(mensaje) mod n
-    hash_bytes = hashlib.sha256(mensaje.encode('utf-8')).digest()
+    # Paso 1: e = SHA-256(bytes del mensaje) mod n
+    # Se hashean los bytes crudos del archivo, igual que en la firma
+    hash_bytes = hashlib.sha256(mensaje_bytes).digest()
     e = int.from_bytes(hash_bytes, byteorder='big') % n
 
     # Paso 2: w = s^-1 mod n
@@ -137,7 +140,7 @@ def verificar():
     linea(f"  Qy = {hex(Q.y())}")
     linea("")
     linea("  MENSAJE", "titulo")
-    linea(f"  {mensaje[:200]}{'...' if len(mensaje) > 200 else ''}")
+    linea(f"  {mensaje_display[:200]}{'...' if len(mensaje_display) > 200 else ''}")
     linea("")
     linea("  FIRMA RECIBIDA", "titulo")
     linea(f"  r = {hex(r)}")

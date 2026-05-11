@@ -80,16 +80,19 @@ def firmar():
         messagebox.showerror("Error", "Selecciona el archivo del mensaje a firmar.")
         return
     try:
-        with open(ruta_msg, 'r') as f:
-            mensaje = f.read().strip()
+        # Leer en binario para soportar acentos y cualquier codificacion
+        with open(ruta_msg, 'rb') as f:
+            mensaje_bytes = f.read().strip()
+        mensaje_display = mensaje_bytes.decode('utf-8', errors='replace')
     except Exception as e:
         messagebox.showerror("Error", f"No se pudo leer el mensaje:\n{e}")
         return
 
-    # Pasos de firma ECDSA 
+    # Pasos de firma ECDSA
 
-    # Paso 1: e = SHA-256(mensaje) convertido a entero mod n
-    hash_bytes = hashlib.sha256(mensaje.encode('utf-8')).digest()
+    # Paso 1: e = SHA-256(bytes del mensaje) convertido a entero mod n
+    # Se hashean los bytes crudos del archivo para que acentos no afecten
+    hash_bytes = hashlib.sha256(mensaje_bytes).digest()
     e = int.from_bytes(hash_bytes, byteorder='big') % n
 
     # Paso 2 y 3: la libreria ecdsa genera k aleatorio y calcula
@@ -97,7 +100,7 @@ def firmar():
     #   s = k^-1 * (e + r*d) mod n
     # Usamos sign_deterministic para que k sea reproducible (RFC 6979)
     firma_bytes = sk.sign_deterministic(
-        mensaje.encode('utf-8'),
+        mensaje_bytes,
         hashfunc=hashlib.sha256
     )
 
@@ -127,7 +130,7 @@ def firmar():
     linea(f"  Qy = {hex(Q.y())}")
     linea("")
     linea("  MENSAJE", "titulo")
-    linea(f"  {mensaje[:200]}{'...' if len(mensaje) > 200 else ''}")
+    linea(f"  {mensaje_display[:200]}{'...' if len(mensaje_display) > 200 else ''}")
     linea("")
     linea("  PASOS DE FIRMA ECDSA", "titulo")
     linea(f"  Paso 1  e  = SHA-256(m) mod n")
