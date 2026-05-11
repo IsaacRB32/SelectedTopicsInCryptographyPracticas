@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TrustFlow — Firma Digital ECDSA</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .fade-in { animation: fadeIn .15s ease-out; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(6px) } to { opacity:1; transform:translateY(0) } }
+    .tab-active { background:white; color:#4f46e5; box-shadow:0 1px 3px rgba(0,0,0,.12); }
+    .tab-inactive { color:#6b7280; }
+    .sub-active { border-bottom-color:#4f46e5; color:#4f46e5; }
+    .sub-inactive { border-bottom-color:transparent; color:#6b7280; }
+  </style>
+</head>
+<body class="bg-slate-100 min-h-screen font-sans">
+
+<!-- ═══════════════════════════ HEADER ═══════════════════════════ -->
+<header class="bg-white border-b border-slate-200 sticky top-0 z-50">
+  <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+
+    <!-- Logo -->
+    <div class="flex items-center gap-3 shrink-0">
+      <div class="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center shadow shadow-indigo-200">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+        </svg>
+      </div>
+      <div>
+        <span class="text-lg font-bold text-slate-900">TrustFlow</span>
+        <span class="ml-2 text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full font-medium">ECDSA · SECP256k1</span>
+      </div>
+    </div>
+
+    <!-- Role Tabs -->
+    <div class="flex bg-slate-100 p-1 rounded-xl gap-1">
+      <button onclick="switchRole('ventas')" id="btn-ventas"
+        class="tab-inactive px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2">
+        🛒 Área de Ventas
+      </button>
+      <button onclick="switchRole('cliente')" id="btn-cliente"
+        class="tab-inactive px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2">
+        👤 Cliente
+        <span id="badge-cliente" class="hidden bg-indigo-600 text-white text-xs rounded-full w-5 h-5 items-center justify-center"></span>
+      </button>
+      <button onclick="switchRole('finanzas')" id="btn-finanzas"
+        class="tab-inactive px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2">
+        🏦 Área de Finanzas
+        <span id="badge-finanzas" class="hidden bg-indigo-600 text-white text-xs rounded-full w-5 h-5 items-center justify-center"></span>
+      </button>
+    </div>
+
+    <!-- API Status -->
+    <div class="flex items-center gap-2 text-xs text-slate-500 shrink-0">
+      <span id="api-dot" class="w-2 h-2 rounded-full bg-slate-300 transition-colors"></span>
+      <span id="api-text">Conectando...</span>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════ MAIN ═══════════════════════════ -->
+<main class="max-w-7xl mx-auto px-6 py-6">
+  <div id="role-ventas"  class="role-panel"></div>
+  <div id="role-cliente" class="role-panel hidden"></div>
+  <div id="role-finanzas"class="role-panel hidden"></div>
+</main>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// ESTADO GLOBAL
+// ════════════════════════════════════════════════════════════
+const S = {
+  role: 'ventas',
+
+  tours: [
+    { id:1, name:'Museo Frida Kahlo',  price:500.00, emoji:'🎨' },
+    { id:2, name:'Bellas Artes',       price:300.00, emoji:'🏛️' },
+    { id:3, name:'Museo Soumaya',      price:100.00, emoji:'🗿' },
+    { id:4, name:'Paseo Chapultepec',  price:650.00, emoji:'🌳' },
+  ],
+  nextTourId: 5,
+  nextSaleNo: 124,
+
+  client: { name:'Carlos Mendoza', privateKey:null, publicKey:null },
+
+  cart: [],     // [{ id, name, price, emoji }]
+  inbox: [],    // ventas → cliente (status: pending)
+  transit: [],  // cliente → finanzas (status: signed)
+  history: [],  // rejected / verified / fraud
+
+  // UI sub-state
+  ventasPage:  'catalog',   // catalog | add | edit
+  clientePage: 'inbox',     // inbox | detail | history
+  finanzasPage:'list',      // list | detail
+  editTour:    null,
+  viewSaleId:  null,
+  finResult:   null,        // { valid, hash }
+  finFraud:    null,        // modified transaction
+};
+
+const API = 'http://localhost:5000';
+
+// ════════════════════════════════════════════════════════════
+// API CALLS
+// ════════════════════════════════════════════════════════════
+async function apiHealth() {
+  const r = await fetch(`${API}/health`);
+  return r.ok;
+}
+async function apiGenerateKeys() {
+  const r = await fetch(`${API}/generate_keys`, { method:'POST' });
+  if (!r.ok) throw new Error('Error al generar llaves');
+  return r.json();
+}
+async function apiSign(transaction, privateKey) {
+  const r = await fetch(`${API}/sign`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ transaction, private_key: privateKey })
+  });
+  if (!r.ok) throw new Error('Error al firmar');
+  return r.json();
+}
+async function apiVerify(transaction, signature, publicKey) {
+  const r = await fetch(`${API}/verify`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ transaction, signature, public_key: publicKey })
+  });
+  if (!r.ok) throw new Error('Error al verificar');
+  return r.json();
+}
+
+// ════════════════════════════════════════════════════════════
+// UTILIDADES
+// ════════════════════════════════════════════════════════════
+const fmt = n => new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(n);
+const pad  = n => String(n).padStart(5,'0');
+
+function getSale(id) {
+  return [...S.inbox,...S.transit,...S.history].find(s => s.id === id);
+}
+
+function statusBadge(status) {
+  const cfg = {
+    pending:  ['bg-amber-100 text-amber-700', 'Pendiente'],
+    signed:   ['bg-blue-100  text-blue-700',  'Firmado'],
+    rejected: ['bg-red-100   text-red-700',   'Rechazado'],
+    verified: ['bg-green-100 text-green-700', 'Verificado ✓'],
+    fraud:    ['bg-red-100   text-red-700',   '⚠️ Fraude'],
+  };
+  const [cls, label] = cfg[status] || ['bg-gray-100 text-gray-600', status];
+  return `<span class="px-2.5 py-1 rounded-full text-xs font-semibold ${cls}">${label}</span>`;
+}
+
+function showToast(msg, type='ok') {
+  const t = document.createElement('div');
+  const color = type === 'error' ? 'bg-red-600' : 'bg-slate-900';
+  t.className = `fixed bottom-6 right-6 ${color} text-white px-4 py-3 rounded-xl text-sm font-medium shadow-lg z-[200] fade-in`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+function updateBadges() {
+  const bc = document.getElementById('badge-cliente');
+  const bf = document.getElementById('badge-finanzas');
+  if (S.inbox.length > 0) {
+    bc.textContent = S.inbox.length;
+    bc.classList.remove('hidden'); bc.classList.add('inline-flex');
+  } else {
+    bc.classList.add('hidden'); bc.classList.remove('inline-flex');
+  }
+  if (S.transit.length > 0) {
+    bf.textContent = S.transit.length;
+    bf.classList.remove('hidden'); bf.classList.add('inline-flex');
+  } else {
+    bf.classList.add('hidden'); bf.classList.remove('inline-flex');
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// ROLE SWITCHING
+// ════════════════════════════════════════════════════════════
+function switchRole(role) {
+  S.role = role;
+  ['ventas','cliente','finanzas'].forEach(r => {
+    document.getElementById(`role-${r}`).classList.toggle('hidden', r !== role);
+    const btn = document.getElementById(`btn-${r}`);
+    btn.classList.toggle('tab-active',   r === role);
+    btn.classList.toggle('tab-inactive', r !== role);
+  });
+  renderRole();
+}
+
+function renderRole() {
+  if (S.role === 'ventas')   renderVentas();
+  if (S.role === 'cliente')  renderCliente();
+  if (S.role === 'finanzas') renderFinanzas();
+  updateBadges();
+}
+
+// ════════════════════════════════════════════════════════════
+// ─── VENTAS ─────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+function renderVentas() {
+  const el = document.getElementById('ventas-content') || (() => {
+    const d = document.createElement('div');
+    d.id = 'ventas-content';
+    document.getElementById('role-ventas').appendChild(d);
+    return d;
+  })();
+  if      (S.ventasPage === 'catalog') el.innerHTML = htmlCatalog();
+  else if (S.ventasPage === 'add')     el.innerHTML = htmlAddTour();
+  else if (S.ventasPage === 'edit')    el.innerHTML = htmlEditTour();
+}
+
+function htmlCatalog() {
+  const cartTotal = S.cart.reduce((s,t) => s + t.price, 0);
+  const iva       = parseFloat((cartTotal * 0.16).toFixed(2));
+  const total     = parseFloat((cartTotal + iva).toFixed(2));
+
+  const cards = S.tours.map(t => {
+    const inCart = S.cart.some(c => c.id === t.id);
+    return `
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+      <div class="bg-gradient-to-br from-indigo-50 to-purple-50 h-28 flex items-center justify-center">
+        <span class="text-5xl">${t.emoji}</span>
+      </div>
+      <div class="p-4">
+        <p class="font-semibold text-slate-800">${t.name}</p>
+        <p class="text-2xl font-bold text-indigo-600 mt-1">${fmt(t.price)}</p>
+        <div class="flex gap-2 mt-3">
+          <button onclick="toggleCart(${t.id})"
+            class="flex-1 py-2 rounded-xl text-sm font-medium transition-all
+              ${inCart ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}">
+            ${inCart ? '✓ En solicitud' : '+ Agregar'}
+          </button>
+          <button onclick="goEditTour(${t.id})"
+            class="p-2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-all" title="Modificar">✏️</button>
+          <button onclick="deleteTour(${t.id})"
+            class="p-2 rounded-xl text-red-400 hover:bg-red-50 hover:text-red-600 transition-all" title="Eliminar">🗑️</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const cartRows = S.cart.map(t => `
+    <div class="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
+      <div class="flex items-center gap-2">
+        <span>${t.emoji}</span>
+        <span class="text-sm text-slate-700">${t.name}</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-sm font-semibold">${fmt(t.price)}</span>
+        <button onclick="toggleCart(${t.id})" class="text-red-400 hover:text-red-600 text-xs leading-none">✕</button>
+      </div>
+    </div>`).join('');
+
+  return `
+  <div class="fade-in">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900">Catálogo de Tours</h1>
+        <p class="text-slate-500 text-sm mt-1">Selecciona tours y genera solicitudes de venta</p>
+      </div>
+      <button onclick="S.ventasPage='add'; renderVentas();"
+        class="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center gap-2">
+        <span>+</span> Agregar Tour
+      </button>
+    </div>
+
+    <div class="flex gap-6 items-start">
+      <!-- Tour Grid -->
+      <div class="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        ${cards || '<p class="text-slate-400 col-span-3 text-center py-10">No hay tours en el catálogo</p>'}
+      </div>
+
+      <!-- Cart / Sale Panel -->
+      <div class="w-72 shrink-0">
+        <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 sticky top-24">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="text-lg">🧾</span>
+            <h2 class="font-bold text-slate-800 flex-1">Solicitud de Venta</h2>
+            <span class="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded-full font-mono">NO. ${pad(S.nextSaleNo)}</span>
+          </div>
+
+          <div class="min-h-16">
+            ${S.cart.length > 0 ? cartRows : '<p class="text-sm text-slate-400 text-center py-4">Agrega tours al carrito</p>'}
+          </div>
+
+          ${S.cart.length > 0 ? `
+          <div class="mt-4 pt-4 border-t border-slate-100 space-y-2 text-sm">
+            <div class="flex justify-between text-slate-500"><span>Subtotal</span><span>${fmt(cartTotal)}</span></div>
+            <div class="flex justify-between text-slate-500"><span>IVA (16%)</span><span>${fmt(iva)}</span></div>
+            <div class="flex justify-between font-bold text-slate-900 pt-2 border-t border-slate-100 text-base">
+              <span>Total</span><span>${fmt(total)}</span>
+            </div>
+          </div>
+          <button onclick="sendSaleToClient()"
+            class="w-full mt-4 bg-indigo-600 text-white py-3 rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors">
+            Enviar al Cliente →
+          </button>` : ''}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function htmlAddTour() {
+  return `
+  <div class="fade-in max-w-lg mx-auto">
+    <button onclick="S.ventasPage='catalog'; renderVentas();"
+      class="flex items-center gap-2 text-slate-500 hover:text-slate-700 mb-6 text-sm">← Volver al catálogo</button>
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-6">Agregar Tour</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Nombre del tour</label>
+          <input id="inp-name" type="text" placeholder="Ej. Museo de Antropología"
+            class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Precio (MXN)</label>
+          <input id="inp-price" type="number" min="1" step="0.01" placeholder="Ej. 450.00"
+            class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Emoji</label>
+          <div class="flex flex-wrap gap-2 mb-2">
+            ${['🎨','🏛️','🗿','🌳','🎭','🏰','⛪','🌮','🎡','🌅'].map(e => `
+              <button onclick="selectEmoji(this,'${e}')"
+                class="emoji-opt p-2 text-xl rounded-xl border border-slate-200 hover:border-indigo-400 transition-all">${e}</button>
+            `).join('')}
+          </div>
+          <input id="inp-emoji" type="text" value="🎨"
+            class="border border-slate-200 rounded-xl px-3 py-2 text-sm w-24 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <p id="add-err" class="text-red-500 text-sm hidden"></p>
+        <div class="flex gap-3 pt-2">
+          <button onclick="S.ventasPage='catalog'; renderVentas();"
+            class="flex-1 border border-slate-200 text-slate-600 py-3 rounded-xl font-medium hover:bg-slate-50 text-sm">Cancelar</button>
+          <button onclick="addTour()"
+            class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 text-sm">Agregar Tour</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function htmlEditTour() {
+  const t = S.editTour;
+  if (!t) { S.ventasPage = 'catalog'; return htmlCatalog(); }
+  return `
+  <div class="fade-in max-w-lg mx-auto">
+    <button onclick="S.ventasPage='catalog'; renderVentas();"
+      class="flex items-center gap-2 text-slate-500 hover:text-slate-700 mb-6 text-sm">← Volver al catálogo</button>
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+      <h2 class="text-xl font-bold text-slate-900 mb-6">Modificar Tour</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
+          <input id="edit-name" type="text" value="${t.name}"
+            class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Precio (MXN)</label>
+          <input id="edit-price" type="number" min="1" step="0.01" value="${t.price}"
+            class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Emoji</label>
+          <input id="edit-emoji" type="text" value="${t.emoji}"
+            class="border border-slate-200 rounded-xl px-3 py-2 text-sm w-24 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div class="flex gap-3 pt-2">
+          <button onclick="S.ventasPage='catalog'; renderVentas();"
+            class="flex-1 border border-slate-200 text-slate-600 py-3 rounded-xl font-medium hover:bg-slate-50 text-sm">Cancelar</button>
+          <button onclick="saveTourEdit(${t.id})"
+            class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 text-sm">Guardar Cambios</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Ventas actions
+function selectEmoji(btn, emoji) {
+  document.querySelectorAll('.emoji-opt').forEach(b => b.classList.remove('ring-2','ring-indigo-500','border-indigo-400'));
+  btn.classList.add('ring-2','ring-indigo-500');
+  document.getElementById('inp-emoji').value = emoji;
+}
+
+function toggleCart(id) {
+  const idx = S.cart.findIndex(c => c.id === id);
+  if (idx >= 0) S.cart.splice(idx, 1);
+  else { const t = S.tours.find(t => t.id === id); if (t) S.cart.push({...t}); }
+  renderVentas();
+}
+
+function addTour() {
+  const name  = document.getElementById('inp-name').value.trim();
+  const price = parseFloat(document.getElementById('inp-price').value);
+  const emoji = document.getElementById('inp-emoji').value.trim() || '🎯';
+  const err   = document.getElementById('add-err');
+  if (!name)           { err.textContent='Ingresa el nombre del tour'; err.classList.remove('hidden'); return; }
+  if (!price || price <= 0) { err.textContent='Ingresa un precio válido'; err.classList.remove('hidden'); return; }
+  S.tours.push({ id: S.nextTourId++, name, price, emoji });
+  S.ventasPage = 'catalog';
+  renderVentas();
+}
+
+function goEditTour(id) {
+  S.editTour = S.tours.find(t => t.id === id);
+  S.ventasPage = 'edit';
+  renderVentas();
+}
+
+function saveTourEdit(id) {
+  const name  = document.getElementById('edit-name').value.trim();
+  const price = parseFloat(document.getElementById('edit-price').value);
+  const emoji = document.getElementById('edit-emoji').value.trim();
+  const tour  = S.tours.find(t => t.id === id);
+  if (tour) Object.assign(tour, { name, price, emoji });
+  const cartItem = S.cart.find(t => t.id === id);
+  if (cartItem) Object.assign(cartItem, { name, price, emoji });
+  S.ventasPage = 'catalog';
+  S.editTour   = null;
+  renderVentas();
+}
+
+function deleteTour(id) {
+  if (!confirm('¿Eliminar este tour del catálogo?')) return;
+  S.tours = S.tours.filter(t => t.id !== id);
+  S.cart  = S.cart.filter(t => t.id !== id);
+  renderVentas();
+}
+
+function sendSaleToClient() {
+  if (S.cart.length === 0) return;
+  const items    = S.cart.map(t => ({ id:t.id, name:t.name, price:t.price, emoji:t.emoji }));
+  const subtotal = parseFloat(items.reduce((s,t) => s + t.price, 0).toFixed(2));
+  const iva      = parseFloat((subtotal * 0.16).toFixed(2));
+  const total    = parseFloat((subtotal + iva).toFixed(2));
+  S.inbox.push({
+    id: `sale-${S.nextSaleNo}`,
+    saleNo: pad(S.nextSaleNo),
+    clientName: S.client.name,
+    items, subtotal, iva, total,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+    signature: null, publicKey: null, signedHash: null, transaction: null,
+  });
+  S.nextSaleNo++;
+  S.cart = [];
+  updateBadges();
+  renderVentas();
+  showToast('✓ Solicitud enviada al cliente');
+}
+
+// ════════════════════════════════════════════════════════════
+// ─── CLIENTE ────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+function renderCliente() {
+  const wrap = document.getElementById('role-cliente');
+  let el = document.getElementById('cliente-content');
+  if (!el) { el = document.createElement('div'); el.id = 'cliente-content'; wrap.appendChild(el); }
+  if      (S.clientePage === 'inbox')   el.innerHTML = htmlClienteInbox();
+  else if (S.clientePage === 'detail')  el.innerHTML = htmlClienteDetail();
+  else if (S.clientePage === 'history') el.innerHTML = htmlClienteHistory();
+}
+
+function subTabs(active) {
+  const tabs = [
+    { key:'inbox',   label:`Notificaciones ${S.inbox.length > 0 ? `<span class="ml-1 bg-indigo-600 text-white text-xs rounded-full px-1.5">${S.inbox.length}</span>` : ''}` },
+    { key:'history', label:'Historial de compras' },
+  ];
+  return tabs.map(t => `
+    <button onclick="S.clientePage='${t.key}'; renderCliente();"
+      class="pb-2 text-sm font-semibold border-b-2 transition-colors ${active===t.key ? 'sub-active' : 'sub-inactive hover:text-slate-700'}">
+      ${t.label}
+    </button>`).join('');
+}
+
+function htmlClienteInbox() {
+  const items = S.inbox.map(s => `
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex items-center justify-between hover:shadow-md transition-shadow">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-2xl">📄</div>
+        <div>
+          <p class="font-semibold text-slate-900">Solicitud de Venta NO. ${s.saleNo}</p>
+          <p class="text-sm text-slate-500">${s.items.length} tour(s) · Total: ${fmt(s.total)}</p>
+          <p class="text-xs text-slate-400 mt-1">${new Date(s.createdAt).toLocaleString('es-MX')}</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        ${statusBadge(s.status)}
+        <button onclick="S.viewSaleId='${s.id}'; S.clientePage='detail'; renderCliente();"
+          class="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-4 py-2 rounded-xl text-sm font-medium transition-colors">
+          Ver detalles →
+        </button>
+      </div>
+    </div>`).join('');
+
+  return `
+  <div class="fade-in">
+    ${S.client.publicKey ? `
+    <div class="bg-green-50 border border-green-200 rounded-2xl p-4 mb-6 flex items-start gap-3">
+      <span class="text-xl">🔑</span>
+      <div class="min-w-0">
+        <p class="text-sm font-semibold text-green-800">Identidad digital activa</p>
+        <p class="text-xs text-green-600 font-mono truncate mt-0.5">Clave pública: ${S.client.publicKey.slice(0,50)}...</p>
+      </div>
+    </div>` : ''}
+    <div class="flex gap-6 border-b border-slate-200 mb-6">${subTabs('inbox')}</div>
+    <div class="space-y-3">
+      ${S.inbox.length > 0 ? items : `
+      <div class="bg-white rounded-2xl border border-slate-100 p-12 text-center">
+        <div class="text-5xl">📭</div>
+        <p class="mt-4 text-slate-500 font-medium">No hay solicitudes pendientes</p>
+        <p class="text-sm text-slate-400 mt-1">Las solicitudes del área de Ventas aparecerán aquí</p>
+      </div>`}
+    </div>
+  </div>`;
+}
+
+function htmlClienteDetail() {
+  const sale = S.inbox.find(s => s.id === S.viewSaleId)
+            || S.history.find(s => s.id === S.viewSaleId)
+            || S.transit.find(s => s.id === S.viewSaleId);
+  if (!sale) { S.clientePage = 'inbox'; return htmlClienteInbox(); }
+
+  const inInbox = S.inbox.some(s => s.id === sale.id);
+  const itemRows = sale.items.map(t => `
+    <div class="flex items-center justify-between py-3 border-b border-slate-100 last:border-0">
+      <div class="flex items-center gap-3"><span class="text-2xl">${t.emoji}</span><span class="text-sm text-slate-700">${t.name}</span></div>
+      <span class="font-semibold text-slate-800">${fmt(t.price)}</span>
+    </div>`).join('');
+
+  return `
+  <div class="fade-in max-w-2xl mx-auto">
+    <button onclick="S.clientePage='inbox'; renderCliente();"
+      class="flex items-center gap-2 text-slate-500 hover:text-slate-700 mb-6 text-sm">← Volver a notificaciones</button>
+
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div class="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-indigo-200 text-sm">Solicitud de Venta</p>
+            <h2 class="text-3xl font-bold mt-1">NO. ${sale.saleNo}</h2>
+          </div>
+          ${statusBadge(sale.status)}
+        </div>
+        <p class="text-indigo-200 text-xs mt-3">${new Date(sale.createdAt).toLocaleString('es-MX',{dateStyle:'long',timeStyle:'short'})}</p>
+      </div>
+
+      <div class="p-6">
+        <h3 class="font-semibold text-slate-900 mb-3">Tours incluidos</h3>
+        <div class="bg-slate-50 rounded-xl p-4 mb-5">${itemRows}</div>
+
+        <div class="space-y-2 mb-6">
+          <div class="flex justify-between text-sm text-slate-500"><span>Subtotal</span><span>${fmt(sale.subtotal)}</span></div>
+          <div class="flex justify-between text-sm text-slate-500"><span>IVA (16%)</span><span>${fmt(sale.iva)}</span></div>
+          <div class="flex justify-between font-bold text-xl text-slate-900 pt-3 border-t border-slate-200">
+            <span>Total</span><span class="text-indigo-600">${fmt(sale.total)}</span>
+          </div>
+        </div>
+
+        ${inInbox ? `
+        <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-4">
+          <p class="text-sm font-semibold text-blue-800">🔐 Al aceptar, firmarás este documento con tu clave privada ECDSA</p>
+          <p class="text-xs text-blue-500 mt-1">La firma garantiza que Finanzas reciba exactamente este importe. Cualquier alteración posterior invalidará la firma.</p>
+        </div>
+        <div class="flex gap-3">
+          <button onclick="rejectSale('${sale.id}')"
+            class="flex-1 border-2 border-red-200 text-red-600 py-3 rounded-xl font-medium hover:bg-red-50 transition-colors">
+            ✕ Rechazar
+          </button>
+          <button id="btn-accept" onclick="acceptSale('${sale.id}')"
+            class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2">
+            🔐 Aceptar y Firmar
+          </button>
+        </div>` : `
+        <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+          <p class="text-sm font-semibold text-green-800">✓ Documento firmado y enviado a Finanzas</p>
+          ${sale.signedHash ? `<p class="text-xs font-mono text-green-600 mt-1 truncate">SHA-256: ${sale.signedHash}</p>` : ''}
+        </div>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+function htmlClienteHistory() {
+  const all = [...S.transit, ...S.history];
+  const rows = all.map(s => `
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 ${s.status==='rejected' ? 'bg-red-50' : 'bg-green-50'} rounded-xl flex items-center justify-center text-2xl">
+          ${s.status==='rejected' ? '❌' : '✅'}
+        </div>
+        <div>
+          <p class="font-semibold text-slate-900">Solicitud NO. ${s.saleNo}</p>
+          <p class="text-sm text-slate-500">${s.items.length} tour(s) · ${fmt(s.total)}</p>
+          <p class="text-xs text-slate-400 mt-1">${new Date(s.createdAt).toLocaleString('es-MX')}</p>
+        </div>
+      </div>
+      ${statusBadge(s.status)}
+    </div>`).join('');
+
+  return `
+  <div class="fade-in">
+    <div class="flex gap-6 border-b border-slate-200 mb-6">${subTabs('history')}</div>
+    <div class="space-y-3">
+      ${all.length > 0 ? rows : `
+      <div class="bg-white rounded-2xl border border-slate-100 p-12 text-center">
+        <div class="text-5xl">📂</div>
+        <p class="mt-4 text-slate-500 font-medium">Sin compras registradas</p>
+      </div>`}
+    </div>
+  </div>`;
+}
+
+async function acceptSale(id) {
+  const sale = S.inbox.find(s => s.id === id);
+  if (!sale) return;
+  const btn = document.getElementById('btn-accept');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="animate-pulse">⏳</span> Firmando...'; }
+
+  try {
+    if (!S.client.privateKey) {
+      showToast('Generando identidad digital ECDSA...');
+      const keys = await apiGenerateKeys();
+      S.client.privateKey = keys.private_key;
+      S.client.publicKey  = keys.public_key;
+    }
+
+    // Construir el objeto de transacción que se firmará (sin emoji, solo datos financieros)
+    const transaction = {
+      saleNo:     sale.saleNo,
+      clientName: sale.clientName,
+      items:      sale.items.map(t => ({ name: t.name, price: t.price })),
+      subtotal:   sale.subtotal,
+      iva:        sale.iva,
+      total:      sale.total,
+      timestamp:  sale.createdAt,
+    };
+
+    const result = await apiSign(transaction, S.client.privateKey);
+    if (result.error) throw new Error(result.error);
+
+    sale.status      = 'signed';
+    sale.signature   = result.signature;
+    sale.publicKey   = S.client.publicKey;
+    sale.signedHash  = result.message_hash;
+    sale.transaction = transaction;
+
+    S.inbox   = S.inbox.filter(s => s.id !== id);
+    S.transit.push(sale);
+    updateBadges();
+    S.clientePage = 'history';
+    renderCliente();
+    showToast('✓ Documento firmado y enviado a Finanzas');
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '🔐 Aceptar y Firmar'; }
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+function rejectSale(id) {
+  const sale = S.inbox.find(s => s.id === id);
+  if (!sale) return;
+  sale.status = 'rejected';
+  S.inbox   = S.inbox.filter(s => s.id !== id);
+  S.history.push(sale);
+  updateBadges();
+  S.clientePage = 'history';
+  renderCliente();
+  showToast('Solicitud rechazada');
+}
+
+// ════════════════════════════════════════════════════════════
+// ─── FINANZAS ────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+function renderFinanzas() {
+  const wrap = document.getElementById('role-finanzas');
+  let el = document.getElementById('finanzas-content');
+  if (!el) { el = document.createElement('div'); el.id = 'finanzas-content'; wrap.appendChild(el); }
+  if (S.finanzasPage === 'list')   el.innerHTML = htmlFinanzasList();
+  if (S.finanzasPage === 'detail') el.innerHTML = htmlFinanzasDetail();
+}
+
+function htmlFinanzasList() {
+  const rows = S.transit.map(s => `
+    <tr class="hover:bg-slate-50 transition-colors">
+      <td class="px-6 py-4">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold text-sm">
+            ${s.clientName.split(' ').map(w=>w[0]).join('')}
+          </div>
+          <div>
+            <p class="font-medium text-slate-900">${s.clientName}</p>
+            <p class="text-xs text-slate-400">${new Date(s.createdAt).toLocaleDateString('es-MX')}</p>
+          </div>
+        </div>
+      </td>
+      <td class="px-6 py-4">
+        <div class="flex items-center gap-2">
+          <span class="text-slate-400">📄</span>
+          <div>
+            <p class="text-sm font-medium text-slate-800">Solicitud NO. ${s.saleNo}</p>
+            <p class="text-xs text-slate-400">${s.items.length} tour(s) · ${fmt(s.total)}</p>
+          </div>
+        </div>
+      </td>
+      <td class="px-6 py-4">${statusBadge(s.status)}</td>
+      <td class="px-6 py-4">
+        <button onclick="openFinanzasDetail('${s.id}')"
+          class="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-4 py-2 rounded-xl text-sm font-medium transition-colors">
+          Verificar →
+        </button>
+      </td>
+    </tr>`).join('');
+
+  return `
+  <div class="fade-in">
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-slate-900">Área de Finanzas</h1>
+      <p class="text-slate-500 text-sm mt-1">Verifica la autenticidad e integridad de los documentos firmados por los clientes</p>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <h2 class="font-semibold text-slate-900">Documentos recibidos</h2>
+        <span class="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full font-medium">${S.transit.length} documento(s)</span>
+      </div>
+      ${S.transit.length > 0 ? `
+      <table class="w-full">
+        <thead><tr class="bg-slate-50 text-left">
+          <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nombre del cliente</th>
+          <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Documentos</th>
+          <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Estado</th>
+          <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Acción</th>
+        </tr></thead>
+        <tbody class="divide-y divide-slate-100">${rows}</tbody>
+      </table>` : `
+      <div class="p-12 text-center">
+        <div class="text-5xl">📋</div>
+        <p class="mt-4 text-slate-500 font-medium">No hay documentos pendientes</p>
+        <p class="text-sm text-slate-400 mt-1">Los documentos firmados por los clientes aparecerán aquí</p>
+      </div>`}
+    </div>
+  </div>`;
+}
+
+function htmlFinanzasDetail() {
+  const sale = S.transit.find(s => s.id === S.viewSaleId)
+            || S.history.find(s => s.id === S.viewSaleId);
+  if (!sale) { S.finanzasPage = 'list'; return htmlFinanzasList(); }
+
+  const isFraud = !!S.finFraud;
+  const vr = S.finResult;
+
+  // Items display
+  const normalItems = sale.items.map(t => `
+    <div class="flex items-center justify-between py-3 border-b border-slate-100 last:border-0">
+      <div class="flex items-center gap-3"><span class="text-2xl">${t.emoji}</span><span class="text-sm text-slate-700">${t.name}</span></div>
+      <span class="font-semibold text-slate-800">${fmt(t.price)}</span>
+    </div>`).join('');
+
+  // Fraud side-by-side comparison
+  const fraudCompare = isFraud ? `
+  <div class="mb-5">
+    <div class="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 flex items-start gap-2">
+      <span class="text-red-500 font-bold">⚠️</span>
+      <div>
+        <p class="text-sm font-bold text-red-700">Alteración detectada en los datos</p>
+        <p class="text-xs text-red-500 mt-0.5">Un agente de Ventas modificó el precio antes de enviar a Finanzas</p>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <p class="text-xs font-bold text-slate-500 uppercase mb-2">✅ Lo que firmó el cliente</p>
+        <div class="bg-green-50 rounded-xl p-3 space-y-1.5">
+          ${sale.transaction.items.map(t => `
+            <div class="flex justify-between text-sm">
+              <span class="text-slate-700">${t.name}</span>
+              <span class="font-medium text-green-700">${fmt(t.price)}</span>
+            </div>`).join('')}
+          <div class="flex justify-between font-bold text-green-800 border-t border-green-200 pt-2 mt-2">
+            <span>Total</span><span>${fmt(sale.transaction.total)}</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="text-xs font-bold text-slate-500 uppercase mb-2">🚨 Lo que recibió Finanzas</p>
+        <div class="bg-red-50 rounded-xl p-3 space-y-1.5">
+          ${S.finFraud.items.map((t,i) => {
+            const orig = sale.transaction.items[i];
+            const changed = orig && orig.price !== t.price;
+            return `<div class="flex justify-between text-sm">
+              <span class="text-slate-700">${t.name}</span>
+              <span class="font-medium ${changed ? 'text-red-600 font-bold' : 'text-slate-700'}">${fmt(t.price)}${changed ? ' ⚠️' : ''}</span>
+            </div>`;
+          }).join('')}
+          <div class="flex justify-between font-bold text-red-800 border-t border-red-200 pt-2 mt-2">
+            <span>Total</span><span>${fmt(S.finFraud.total)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>` : '';
+
+  return `
+  <div class="fade-in max-w-3xl mx-auto">
+    <button onclick="S.finanzasPage='list'; S.finResult=null; S.finFraud=null; renderFinanzas();"
+      class="flex items-center gap-2 text-slate-500 hover:text-slate-700 mb-6 text-sm">← Volver a documentos</button>
+
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div class="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-indigo-200 text-sm">Verificación de Venta</p>
+            <h2 class="text-3xl font-bold mt-1">NO. ${sale.saleNo}</h2>
+          </div>
+          <div class="text-right">
+            <p class="text-indigo-200 text-xs">Cliente</p>
+            <p class="font-semibold">${sale.clientName}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-6">
+        ${isFraud ? fraudCompare : `
+        <h3 class="font-semibold text-slate-900 mb-3">Desglose de la venta</h3>
+        <div class="bg-slate-50 rounded-xl p-4 mb-5">${normalItems}</div>`}
+
+        <!-- Totals -->
+        <div class="space-y-2 mb-5">
+          <div class="flex justify-between text-sm text-slate-500"><span>Subtotal</span><span>${fmt(sale.subtotal)}</span></div>
+          <div class="flex justify-between text-sm text-slate-500"><span>IVA (16%)</span><span>${fmt(sale.iva)}</span></div>
+          <div class="flex justify-between font-bold text-xl text-slate-900 pt-3 border-t border-slate-200">
+            <span>Total</span><span class="text-indigo-600">${fmt(sale.total)}</span>
+          </div>
+        </div>
+
+        <!-- Crypto info -->
+        <div class="bg-slate-50 rounded-xl p-4 mb-5 space-y-2">
+          <p class="text-xs font-bold text-slate-500 uppercase mb-1">Datos criptográficos</p>
+          <div>
+            <p class="text-xs text-slate-400">Clave pública del cliente (Q = d·G)</p>
+            <p class="font-mono text-xs text-slate-600 truncate">${sale.publicKey ? sale.publicKey.slice(0,60)+'...' : 'N/A'}</p>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400">Firma ECDSA (r ‖ s)</p>
+            <p class="font-mono text-xs text-slate-600 truncate">${sale.signature ? sale.signature.slice(0,60)+'...' : 'N/A'}</p>
+          </div>
+          ${vr ? `<div>
+            <p class="text-xs text-slate-400">SHA-256 del mensaje verificado</p>
+            <p class="font-mono text-xs text-slate-600">${vr.hash}</p>
+          </div>` : ''}
+        </div>
+
+        <!-- Result Banner -->
+        ${vr ? `
+        <div class="rounded-xl p-5 mb-5 ${vr.valid
+          ? 'bg-green-50 border-2 border-green-400'
+          : 'bg-red-50 border-2 border-red-400'}">
+          <div class="flex items-start gap-3">
+            <span class="text-3xl">${vr.valid ? '✅' : '🚨'}</span>
+            <div>
+              <p class="font-bold text-lg ${vr.valid ? 'text-green-800' : 'text-red-800'}">
+                ${vr.valid
+                  ? 'Venta segura, la venta no ha sido alterada'
+                  : 'Venta modificada, se ha detectado que se ha alterado la venta.'}
+              </p>
+              <p class="text-sm mt-1 ${vr.valid ? 'text-green-600' : 'text-red-600'}">
+                ${vr.valid
+                  ? 'La firma ECDSA es válida. El documento no fue modificado desde que el cliente lo firmó.'
+                  : 'La firma ECDSA no corresponde al documento recibido. Los datos fueron alterados en tránsito.'}
+              </p>
+            </div>
+          </div>
+        </div>` : ''}
+
+        <!-- Action Buttons -->
+        <div class="flex gap-3">
+          <button id="btn-verify" onclick="runVerify('${sale.id}', false)"
+            class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 transition-colors text-sm flex items-center justify-center gap-2">
+            🔍 Verificar Firma
+          </button>
+          <button onclick="runVerify('${sale.id}', true)"
+            class="flex-1 border-2 border-red-300 text-red-600 py-3 rounded-xl font-semibold hover:bg-red-50 transition-colors text-sm flex items-center justify-center gap-2">
+            ⚡ Simular alteración de Ventas (Cambiar precio)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function openFinanzasDetail(id) {
+  S.viewSaleId   = id;
+  S.finanzasPage = 'detail';
+  S.finResult    = null;
+  S.finFraud     = null;
+  renderFinanzas();
+}
+
+async function runVerify(saleId, simulateFraud) {
+  const sale = S.transit.find(s => s.id === saleId) || S.history.find(s => s.id === saleId);
+  if (!sale) return;
+
+  const btn = document.getElementById('btn-verify');
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Verificando...'; }
+
+  let txToVerify = sale.transaction;
+
+  if (simulateFraud) {
+    // Simular que Ventas redujo el precio del primer tour para quedarse con la diferencia
+    const fraud = JSON.parse(JSON.stringify(sale.transaction));
+    if (fraud.items && fraud.items.length > 0) {
+      const originalPrice   = fraud.items[0].price;
+      fraud.items[0].price  = parseFloat((originalPrice * 0.65).toFixed(2));  // reducir 35%
+      fraud.subtotal        = parseFloat(fraud.items.reduce((s,t) => s + t.price, 0).toFixed(2));
+      fraud.iva             = parseFloat((fraud.subtotal * 0.16).toFixed(2));
+      fraud.total           = parseFloat((fraud.subtotal + fraud.iva).toFixed(2));
+    }
+    S.finFraud   = fraud;
+    txToVerify   = fraud;
+  } else {
+    S.finFraud = null;
+  }
+
+  try {
+    const result = await apiVerify(txToVerify, sale.signature, sale.publicKey);
+    S.finResult = { valid: result.valid, hash: result.message_hash };
+    if (!simulateFraud && result.valid) sale.status = 'verified';
+    if (simulateFraud && !result.valid) sale.status = 'fraud';
+    renderFinanzas();
+    updateBadges();
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '🔍 Verificar Firma'; }
+    showToast('Error al verificar: ' + err.message, 'error');
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════
+async function checkApi() {
+  try {
+    const ok = await apiHealth();
+    document.getElementById('api-dot').className  = ok
+      ? 'w-2 h-2 rounded-full bg-green-500 transition-colors'
+      : 'w-2 h-2 rounded-full bg-red-500 transition-colors';
+    document.getElementById('api-text').textContent = ok ? 'API conectada' : 'API desconectada — inicia app.py';
+  } catch {
+    document.getElementById('api-dot').className  = 'w-2 h-2 rounded-full bg-red-500 transition-colors';
+    document.getElementById('api-text').textContent = 'API desconectada — inicia app.py';
+  }
+}
+
+switchRole('ventas');
+checkApi();
+setInterval(checkApi, 8000);
+</script>
+</body>
+</html>
